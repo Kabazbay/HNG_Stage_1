@@ -52,7 +52,12 @@ async function connectToDatabase() {
   }
 
   try {
-    await mongoose.connect(process.env.MONGODB_URI);
+    // serverSelectionTimeoutMS: 5000 ensures the connection attempts fail
+    // after 5 seconds instead of waiting the default 30s.
+    // This prevents Vercel from timing out the whole request.
+    await mongoose.connect(process.env.MONGODB_URI, {
+      serverSelectionTimeoutMS: 5000,
+    });
     isConnected = true;
     console.log('✅ Connected to MongoDB Atlas');
   } catch (error) {
