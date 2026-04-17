@@ -1,20 +1,30 @@
-# HNG Stage 1 — Profile API
+# 🚀 HNG Stage 1 — Profile Intelligence API
 
-A REST API that accepts a name, fetches data from three external APIs (Genderize, Agify, Nationalize), classifies the results, and stores profiles in MongoDB.
+[![Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?logo=vercel)](https://hng-stage-1-coral.vercel.app)
+[![Node.js](https://img.shields.io/badge/Node.js-v18+-green?logo=node.js)](https://nodejs.org)
+[![MongoDB](https://img.shields.io/badge/Database-MongoDB%20Atlas-blue?logo=mongodb)](https://mongodb.com)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Features
+A high-performance REST API that leverages intelligence from multiple external sources (Genderize, Agify, Nationalize) to build and persist detailed user profiles with advanced classification logic.
 
-- **Create profiles** from name analysis using external APIs
-- **Idempotent creation** — duplicate names return the existing profile
-- **Filter profiles** by gender, country, or age group
-- **UUID v7** identifiers for all profiles
-- **Full error handling** with proper HTTP status codes
+## 🌟 Key Features
 
-## Tech Stack
+- **Multi-API Integration**: Aggregates data from 3 distinct intelligence APIs in parallel.
+- **Data Persistence**: Uses MongoDB Atlas for reliable profile storage.
+- **Classification Engine**: Automatically categorizes profiles into age groups and identifies primary nationality.
+- **Idempotency**: Smart handling of duplicate requests to prevent redundant data.
+- **UUID v7**: Future-proof, time-ordered identifiers for every record.
+- **Advanced Filtering**: Search profiles by gender, country, or age group with case-insensitive support.
 
-- Node.js + Express
-- MongoDB Atlas (Mongoose ODM)
-- External APIs: Genderize, Agify, Nationalize
+## 🛠️ Tech Stack
+
+- **Runtime**: Node.js & Express
+- **Database**: MongoDB Atlas via Mongoose
+- **Deployment**: Vercel (Serverless Functions)
+- **External Intelligence**:
+  - `api.genderize.io`
+  - `api.agify.io`
+  - `api.nationalize.io`
 
 ## Setup
 
