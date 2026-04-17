@@ -72,7 +72,6 @@ const profileSchema = new mongoose.Schema({
   },
 }, {
   // These options control how the schema behaves:
-  _id: false,          // Don't auto-generate _id, we'll set it ourselves
   versionKey: false,   // Don't add the "__v" field that Mongoose adds by default
 });
 

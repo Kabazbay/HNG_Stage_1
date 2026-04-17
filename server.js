@@ -108,6 +108,16 @@ app.get('/', (req, res) => {
 if (require.main === module) {
   const PORT = process.env.PORT || 3000;
   connectToDatabase().then(() => {
+    try {
+      // Clear any old conflicting 'id' index if it exists in the database
+      const collections = await mongoose.connection.db.listCollections({ name: 'profiles' }).toArray();
+      if (collections.length > 0) {
+        await mongoose.connection.db.collection('profiles').dropIndex('id_1').catch(() => {});
+      }
+    } catch (e) {
+      // Ignore if collection or index doesn't exist
+    }
+
     app.listen(PORT, () => {
       console.log(`🚀 Server is running on port ${PORT}`);
     });
