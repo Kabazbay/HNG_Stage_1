@@ -1,0 +1,5 @@
+# Dependencies - these are downloaded via "npm install", never push them
+node_modules/
+
+# Environment variables - contains secrets like your database password
+.env
