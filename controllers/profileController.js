@@ -5,7 +5,7 @@
 //   req = the incoming request (contains body, params, query)
 //   res = the response object (we use it to send data back)
 
-const { v7: uuidv7 } = require('uuid');    // For generating UUID v7 IDs
+const { uuidv7 } = require('uuidv7');    // For generating UUID v7 IDs (CommonJS compatible)
 const Profile = require('../models/Profile'); // Our MongoDB model
 const { fetchGender, fetchAge, fetchNationality } = require('../utils/externalApis');
 
