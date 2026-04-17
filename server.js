@@ -107,7 +107,7 @@ app.get('/', (req, res) => {
 // start the server. If it's being imported by Vercel, just export.
 if (require.main === module) {
   const PORT = process.env.PORT || 3000;
-  connectToDatabase().then(() => {
+  connectToDatabase().then(async () => {
     try {
       // Clear any old conflicting 'id' index if it exists in the database
       const collections = await mongoose.connection.db.listCollections({ name: 'profiles' }).toArray();
