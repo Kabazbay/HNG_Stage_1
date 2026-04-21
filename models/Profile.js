@@ -59,6 +59,12 @@ const profileSchema = new mongoose.Schema({
     required: true,
   },
 
+  // From Nationalize API / Seed Data — the full country name
+  country_name: {
+    type: String,
+    required: true,
+  },
+
   // From Nationalize API — how confident the API is about the country (0 to 1)
   country_probability: {
     type: Number,

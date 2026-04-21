@@ -85,9 +85,11 @@ async function fetchNationality(name) {
     // data.country is an array like: [{ country_id: "NG", probability: 0.4 }, { country_id: "US", probability: 0.3 }]
     // We sort by probability descending and take the first one
     const topCountry = data.country.sort((a, b) => b.probability - a.probability)[0];
+    const { getName } = require('country-list');
 
     return {
       country_id: topCountry.country_id,       // e.g., "NG"
+      country_name: getName(topCountry.country_id) || topCountry.country_id,
       country_probability: topCountry.probability, // e.g., 0.85
     };
   } catch (error) {

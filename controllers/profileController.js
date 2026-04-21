@@ -34,6 +34,7 @@ function formatProfile(profile) {
     age: profile.age,
     age_group: profile.age_group,
     country_id: profile.country_id,
+    country_name: profile.country_name,
     country_probability: profile.country_probability,
     created_at: profile.created_at.toISOString(), // Converts Date to "2026-04-01T12:00:00.000Z"
   };
@@ -137,6 +138,7 @@ async function createProfile(req, res) {
       age: ageData.age,
       age_group: ageGroup,
       country_id: nationalityData.country_id,
+      country_name: nationalityData.country_name,
       country_probability: nationalityData.country_probability,
       created_at: new Date(), // Current time in UTC
     });
@@ -195,44 +197,64 @@ async function getProfile(req, res) {
 
 // ═══════════════════════════════════════════════
 // 3. GET ALL PROFILES — GET /api/profiles
-// Supports optional query params: gender, country_id, age_group
+// Supports filtering, sorting, and pagination.
 // ═══════════════════════════════════════════════
 async function getAllProfiles(req, res) {
   try {
-    // req.query contains the URL query parameters
-    // e.g., GET /api/profiles?gender=male&country_id=NG
-    //   → req.query = { gender: "male", country_id: "NG" }
-    const { gender, country_id, age_group } = req.query;
+    const {
+      gender, country_id, age_group,
+      min_age, max_age,
+      min_gender_probability, min_country_probability,
+      sort_by, order,
+      page: rawPage, limit: rawLimit
+    } = req.query;
 
-    // Build a filter object for MongoDB
-    // Only add filters for parameters that were actually provided
     const filter = {};
 
-    if (gender) {
-      // Case-insensitive matching: "Male", "male", "MALE" all work
-      // RegExp with 'i' flag means case-insensitive
-      filter.gender = new RegExp(`^${gender}$`, 'i');
+    if (gender) filter.gender = new RegExp(`^${gender}$`, 'i');
+    if (country_id) filter.country_id = new RegExp(`^${country_id}$`, 'i');
+    if (age_group) filter.age_group = new RegExp(`^${age_group}$`, 'i');
+    
+    if (min_age !== undefined || max_age !== undefined) {
+      filter.age = {};
+      if (min_age !== undefined) filter.age.$gte = parseInt(min_age, 10);
+      if (max_age !== undefined) filter.age.$lte = parseInt(max_age, 10);
     }
 
-    if (country_id) {
-      // Country codes are typically uppercase (NG, US, GB)
-      // But we match case-insensitively to be safe
-      filter.country_id = new RegExp(`^${country_id}$`, 'i');
+    if (min_gender_probability !== undefined) {
+      filter.gender_probability = { $gte: parseFloat(min_gender_probability) };
     }
 
-    if (age_group) {
-      // age_group values: child, teenager, adult, senior
-      filter.age_group = new RegExp(`^${age_group}$`, 'i');
+    if (min_country_probability !== undefined) {
+      filter.country_probability = { $gte: parseFloat(min_country_probability) };
     }
 
-    // .find(filter) searches MongoDB for all documents matching the filter
-    // If filter is {}, it returns ALL documents
-    const profiles = await Profile.find(filter);
+    // Pagination
+    let page = parseInt(rawPage, 10);
+    if (isNaN(page) || page < 1) page = 1;
+
+    let limit = parseInt(rawLimit, 10);
+    if (isNaN(limit) || limit < 1) limit = 10;
+    if (limit > 50) limit = 50;
+
+    const skip = (page - 1) * limit;
+
+    // Sorting
+    const sortField = ['age', 'created_at', 'gender_probability'].includes(sort_by) ? sort_by : 'created_at';
+    const sortOrder = order === 'desc' ? -1 : 1; // default to asc
+
+    // Execute queries
+    const [profiles, total] = await Promise.all([
+      Profile.find(filter).sort({ [sortField]: sortOrder }).skip(skip).limit(limit),
+      Profile.countDocuments(filter)
+    ]);
 
     return res.status(200).json({
       status: 'success',
-      count: profiles.length,
-      data: profiles.map(formatProfileSummary), // Convert each profile to the short format
+      page,
+      limit,
+      total,
+      data: profiles.map(formatProfile), // Changed to formatProfile to match Stage 2 format
     });
 
   } catch (error) {
@@ -275,5 +297,80 @@ async function deleteProfile(req, res) {
   }
 }
 
-// Export all 4 functions so the routes file can use them
-module.exports = { createProfile, getProfile, getAllProfiles, deleteProfile };
+// ═══════════════════════════════════════════════
+// 5. NATURAL LANGUAGE QUERY — GET /api/profiles/search
+// ═══════════════════════════════════════════════
+async function searchProfilesNLQ(req, res) {
+  try {
+    const { q, page: rawPage, limit: rawLimit } = req.query;
+
+    if (!q) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Missing or empty parameter',
+      });
+    }
+
+    const { parseNLQ } = require('../utils/nlpParser');
+    const parsedFilters = parseNLQ(q);
+
+    if (!parsedFilters) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Unable to interpret query',
+      });
+    }
+
+    // Now convert the parsed filters into a Mongoose format just like getAllProfiles does
+    const mongooseFilter = {};
+    
+    if (parsedFilters.gender) {
+      mongooseFilter.gender = new RegExp(`^${parsedFilters.gender}$`, 'i');
+    }
+    if (parsedFilters.country_id) {
+      mongooseFilter.country_id = new RegExp(`^${parsedFilters.country_id}$`, 'i');
+    }
+    if (parsedFilters.age_group) {
+      mongooseFilter.age_group = new RegExp(`^${parsedFilters.age_group}$`, 'i');
+    }
+
+    if (parsedFilters.min_age !== undefined || parsedFilters.max_age !== undefined) {
+      mongooseFilter.age = {};
+      if (parsedFilters.min_age !== undefined) mongooseFilter.age.$gte = parsedFilters.min_age;
+      if (parsedFilters.max_age !== undefined) mongooseFilter.age.$lte = parsedFilters.max_age;
+    }
+
+    // Pagination
+    let page = parseInt(rawPage, 10);
+    if (isNaN(page) || page < 1) page = 1;
+
+    let limit = parseInt(rawLimit, 10);
+    if (isNaN(limit) || limit < 1) limit = 10;
+    if (limit > 50) limit = 50;
+
+    const skip = (page - 1) * limit;
+
+    const [profiles, total] = await Promise.all([
+      Profile.find(mongooseFilter).sort({ created_at: -1 }).skip(skip).limit(limit),
+      Profile.countDocuments(mongooseFilter)
+    ]);
+
+    return res.status(200).json({
+      status: 'success',
+      page,
+      limit,
+      total,
+      data: profiles.map(formatProfile),
+    });
+
+  } catch (error) {
+    console.error('Error in searchProfilesNLQ:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Internal server error',
+    });
+  }
+}
+
+// Export all functions so the routes file can use them
+module.exports = { createProfile, getProfile, getAllProfiles, deleteProfile, searchProfilesNLQ };

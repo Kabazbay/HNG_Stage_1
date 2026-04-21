@@ -15,6 +15,7 @@ const {
   getProfile,
   getAllProfiles,
   deleteProfile,
+  searchProfilesNLQ,
 } = require('../controllers/profileController');
 
 // ──────────────────────────────────────────────
@@ -24,6 +25,10 @@ const {
 
 // POST /api/profiles → Create a new profile
 router.post('/', createProfile);
+
+// GET /api/profiles/search → Natural Language Query Search
+// IMPORTANT: This route MUST come before "/:id"
+router.get('/search', searchProfilesNLQ);
 
 // GET /api/profiles → Get all profiles (with optional filters)
 // IMPORTANT: This route MUST come before "/:id" because Express matches

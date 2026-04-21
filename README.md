@@ -99,8 +99,40 @@ Nationality is determined by the country with the highest probability from the N
 
 | Status | Meaning                          |
 |--------|----------------------------------|
-| 400    | Missing or empty name            |
+| 400    | Missing or empty name / Parsing Error|
 | 404    | Profile not found                |
 | 422    | Invalid type (name is not a string) |
 | 502    | External API returned invalid data |
 | 500    | Internal server error            |
+
+## 🧠 Natural Language Parser (Stage 2)
+
+The system includes a rule-based Natural Language Search Endpoint (`GET /api/profiles/search?q=...`) to convert plain English strings into database filters.
+
+### Approach & Mappings
+
+The parser splits the query string into tokens, removes common "stop words" (`and`, `who`, `are`, `in`, `with`, etc.), and iterates through the tokens matching known patterns:
+
+- **Gender:** 
+  - `male`, `males`, `men`, `boy`, `boys` ➡️ `gender=male`
+  - `female`, `females`, `women`, `girl`, `girls` ➡️ `gender=female`
+- **Age Aliases:** 
+  - `young` ➡️ `min_age=16`, `max_age=24` (Note: internal mapping for queries only)
+- **Age Groups:** 
+  - `child`, `children` ➡️ `age_group=child`
+  - `teenager`, `teenagers`, `teen`, `teens` ➡️ `age_group=teenager`
+  - `adult`, `adults` ➡️ `age_group=adult`
+  - `senior`, `seniors` ➡️ `age_group=senior`
+- **Age Relations:** 
+  - `above X`, `over X`, `older than X` ➡️ `min_age = X + 1`
+  - `under X`, `below X`, `younger than X` ➡️ `max_age = X - 1`
+- **Location:** 
+  - `from [CountryName]` ➡️ The `[CountryName]` is passed to the `country-list` npm package to extract the 2-letter ISO code (`country_id`). E.g., `from nigeria` ➡️ `country_id=NG`.
+
+### Limitations & Edge Cases Not Handled
+
+Because the parser is strictly rule-based without an LLM:
+1. **OR/Complex Logic:** It cannot comprehend "OR" conditions (e.g., "males from nigeria OR females from kenya"). It treats everything as an "AND" condition.
+2. **Ambiguous Locations:** Multi-word country names are partially supported (checks up to 3 words ahead), but complex location phrases with typos might fail to map to proper ISO codes.
+3. **Compound Age Relations:** Ranges described as "between 20 and 30" are not currently supported; only simple comparative boundaries like "above 20" or "under 30".
+4. **Out of vocabulary words:** If a phrase like "middle-aged folks" is used, the system has no rule matching it to `adult` and will simply ignore those words. If the entire query results in 0 parsed filters, it returns a 400 Error ("Unable to interpret query").
