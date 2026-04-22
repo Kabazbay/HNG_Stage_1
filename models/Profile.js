@@ -35,12 +35,6 @@ const profileSchema = new mongoose.Schema({
     required: true,
   },
 
-  // From Genderize API — how many people with this name were in their dataset
-  sample_size: {
-    type: Number,
-    required: true,
-  },
-
   // From Agify API — predicted age
   age: {
     type: Number,

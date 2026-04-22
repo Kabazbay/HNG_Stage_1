@@ -30,12 +30,11 @@ function formatProfile(profile) {
     name: profile.name,
     gender: profile.gender,
     gender_probability: profile.gender_probability,
-    sample_size: profile.sample_size,
     age: profile.age,
     age_group: profile.age_group,
-    country_id: profile.country_id,
-    country_name: profile.country_name,
-    country_probability: profile.country_probability,
+    country_id: profile.country_id || null,
+    country_name: profile.country_name || null,
+    country_probability: profile.country_probability || null,
     created_at: profile.created_at.toISOString(), // Converts Date to "2026-04-01T12:00:00.000Z"
   };
 }
@@ -134,7 +133,6 @@ async function createProfile(req, res) {
       name: trimmedName, // Schema will auto-lowercase this
       gender: genderData.gender,
       gender_probability: genderData.gender_probability,
-      sample_size: genderData.sample_size,
       age: ageData.age,
       age_group: ageGroup,
       country_id: nationalityData.country_id,

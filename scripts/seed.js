@@ -49,16 +49,18 @@ async function runSeeder() {
   let inserted = 0;
   let updated = 0;
 
+  const { uuidv7 } = require('uuidv7');
+
   for (const p of profilesArray) {
     try {
-      // Map the JSON structure to our Mongoose Schema.
-      // E.g., handling potential missing fields or formatting timestamps if necessary.
-      const doc = {
-        _id: p.id,
-        name: p.name.toLowerCase().trim(),
+      // Create document payload. Generate a new UUID if 'id' is missing.
+      const docId = p.id || uuidv7();
+      const profileName = p.name.toLowerCase().trim();
+
+      const docToUpdate = {
+        name: profileName,
         gender: p.gender,
         gender_probability: p.gender_probability,
-        sample_size: p.sample_size || 0, // Fallback if sample_size is not in the JSON but required in schema
         age: p.age,
         age_group: p.age_group,
         country_id: p.country_id,
@@ -67,11 +69,10 @@ async function runSeeder() {
         created_at: p.created_at ? new Date(p.created_at) : new Date()
       };
 
-      // Upsert based on `_id`. If `_id` matches, update the existing document. If not, insert as new.
-      // This prevents duplicates!
+      // Upsert based on `name` since it is marked UNIQUE in the schema.
       const result = await Profile.updateOne(
-        { _id: p.id },
-        { $set: doc },
+        { name: profileName },
+        { $set: docToUpdate, $setOnInsert: { _id: docId } },
         { upsert: true }
       );
 
