@@ -54,6 +54,59 @@ function formatProfileSummary(profile) {
   };
 }
 
+// ──────────────────────────────────────────────
+// Helper function: build a MongoDB filter from query parameters
+// Used by getAllProfiles, searchProfilesNLQ, and exportCSV
+// so they all apply filters the SAME way.
+// ──────────────────────────────────────────────
+function buildFilter(params) {
+  const filter = {};
+
+  if (params.gender) filter.gender = new RegExp(`^${params.gender}$`, 'i');
+  if (params.country_id) filter.country_id = new RegExp(`^${params.country_id}$`, 'i');
+  if (params.age_group) filter.age_group = new RegExp(`^${params.age_group}$`, 'i');
+
+  if (params.min_age !== undefined || params.max_age !== undefined) {
+    filter.age = {};
+    if (params.min_age !== undefined) filter.age.$gte = parseInt(params.min_age, 10);
+    if (params.max_age !== undefined) filter.age.$lte = parseInt(params.max_age, 10);
+  }
+
+  if (params.min_gender_probability !== undefined) {
+    filter.gender_probability = { $gte: parseFloat(params.min_gender_probability) };
+  }
+
+  if (params.min_country_probability !== undefined) {
+    filter.country_probability = { $gte: parseFloat(params.min_country_probability) };
+  }
+
+  return filter;
+}
+
+// ──────────────────────────────────────────────
+// Helper function: parse and validate pagination params
+// ──────────────────────────────────────────────
+function parsePagination(rawPage, rawLimit) {
+  let page = parseInt(rawPage, 10);
+  if (isNaN(page) || page < 1) page = 1;
+
+  let limit = parseInt(rawLimit, 10);
+  if (isNaN(limit) || limit < 1) limit = 10;
+  if (limit > 50) limit = 50;
+
+  const skip = (page - 1) * limit;
+  return { page, limit, skip };
+}
+
+// ──────────────────────────────────────────────
+// Helper function: parse sorting params
+// ──────────────────────────────────────────────
+function parseSorting(sortBy, order) {
+  const sortField = ['age', 'created_at', 'gender_probability', 'name'].includes(sortBy) ? sortBy : 'created_at';
+  const sortOrder = order === 'desc' ? -1 : 1;
+  return { [sortField]: sortOrder };
+}
+
 // ═══════════════════════════════════════════════
 // 1. CREATE PROFILE — POST /api/profiles
 // ═══════════════════════════════════════════════
@@ -207,52 +260,43 @@ async function getAllProfiles(req, res) {
       page: rawPage, limit: rawLimit
     } = req.query;
 
-    const filter = {};
+    // Build filter using shared helper
+    const filter = buildFilter({
+      gender, country_id, age_group,
+      min_age, max_age,
+      min_gender_probability, min_country_probability,
+    });
 
-    if (gender) filter.gender = new RegExp(`^${gender}$`, 'i');
-    if (country_id) filter.country_id = new RegExp(`^${country_id}$`, 'i');
-    if (age_group) filter.age_group = new RegExp(`^${age_group}$`, 'i');
-    
-    if (min_age !== undefined || max_age !== undefined) {
-      filter.age = {};
-      if (min_age !== undefined) filter.age.$gte = parseInt(min_age, 10);
-      if (max_age !== undefined) filter.age.$lte = parseInt(max_age, 10);
-    }
+    // Pagination using shared helper
+    const { page, limit, skip } = parsePagination(rawPage, rawLimit);
 
-    if (min_gender_probability !== undefined) {
-      filter.gender_probability = { $gte: parseFloat(min_gender_probability) };
-    }
-
-    if (min_country_probability !== undefined) {
-      filter.country_probability = { $gte: parseFloat(min_country_probability) };
-    }
-
-    // Pagination
-    let page = parseInt(rawPage, 10);
-    if (isNaN(page) || page < 1) page = 1;
-
-    let limit = parseInt(rawLimit, 10);
-    if (isNaN(limit) || limit < 1) limit = 10;
-    if (limit > 50) limit = 50;
-
-    const skip = (page - 1) * limit;
-
-    // Sorting
-    const sortField = ['age', 'created_at', 'gender_probability'].includes(sort_by) ? sort_by : 'created_at';
-    const sortOrder = order === 'desc' ? -1 : 1; // default to asc
+    // Sorting using shared helper
+    const sort = parseSorting(sort_by, order);
 
     // Execute queries
     const [profiles, total] = await Promise.all([
-      Profile.find(filter).sort({ [sortField]: sortOrder }).skip(skip).limit(limit),
+      Profile.find(filter).sort(sort).skip(skip).limit(limit),
       Profile.countDocuments(filter)
     ]);
 
+    // Calculate pagination metadata
+    const totalPages = Math.ceil(total / limit);
+
     return res.status(200).json({
       status: 'success',
+      data: profiles.map(formatProfile),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+      },
+      // Keep these top-level for backward compatibility with Stage 2
       page,
       limit,
       total,
-      data: profiles.map(formatProfile), // Changed to formatProfile to match Stage 2 format
     });
 
   } catch (error) {
@@ -339,26 +383,30 @@ async function searchProfilesNLQ(req, res) {
     }
 
     // Pagination
-    let page = parseInt(rawPage, 10);
-    if (isNaN(page) || page < 1) page = 1;
-
-    let limit = parseInt(rawLimit, 10);
-    if (isNaN(limit) || limit < 1) limit = 10;
-    if (limit > 50) limit = 50;
-
-    const skip = (page - 1) * limit;
+    const { page, limit, skip } = parsePagination(rawPage, rawLimit);
 
     const [profiles, total] = await Promise.all([
       Profile.find(mongooseFilter).sort({ created_at: -1 }).skip(skip).limit(limit),
       Profile.countDocuments(mongooseFilter)
     ]);
 
+    const totalPages = Math.ceil(total / limit);
+
     return res.status(200).json({
       status: 'success',
+      data: profiles.map(formatProfile),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+      },
+      // Keep these top-level for backward compatibility with Stage 2
       page,
       limit,
       total,
-      data: profiles.map(formatProfile),
     });
 
   } catch (error) {
@@ -370,5 +418,94 @@ async function searchProfilesNLQ(req, res) {
   }
 }
 
+// ═══════════════════════════════════════════════
+// 6. EXPORT PROFILES AS CSV — GET /api/profiles/export
+// ═══════════════════════════════════════════════
+// This endpoint returns a CSV file instead of JSON.
+// It applies the same filters as GET /api/profiles.
+//
+// WHAT IS CSV?
+// CSV (Comma-Separated Values) is a simple text format for tabular data.
+// Each line is a row, and values are separated by commas.
+// Example:
+//   id,name,gender,age
+//   abc-123,ella,female,25
+//   def-456,john,male,30
+async function exportCSV(req, res) {
+  try {
+    const { format } = req.query;
+
+    // Only CSV format is supported
+    if (format !== 'csv') {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Only CSV format is supported. Use ?format=csv',
+      });
+    }
+
+    const {
+      gender, country_id, age_group,
+      min_age, max_age,
+      min_gender_probability, min_country_probability,
+      sort_by, order,
+    } = req.query;
+
+    // Build filter using shared helper
+    const filter = buildFilter({
+      gender, country_id, age_group,
+      min_age, max_age,
+      min_gender_probability, min_country_probability,
+    });
+
+    // Sorting using shared helper
+    const sort = parseSorting(sort_by, order);
+
+    // Fetch ALL matching profiles (no pagination for export)
+    const profiles = await Profile.find(filter).sort(sort);
+
+    // ── Build the CSV string ──
+    // Header row (column names in the required order)
+    const csvColumns = [
+      'id', 'name', 'gender', 'gender_probability', 'age',
+      'age_group', 'country_id', 'country_name', 'country_probability', 'created_at'
+    ];
+
+    // Start with the header row
+    let csv = csvColumns.join(',') + '\n';
+
+    // Add each profile as a row
+    for (const profile of profiles) {
+      const formatted = formatProfile(profile);
+      const row = [
+        formatted.id,
+        `"${(formatted.name || '').replace(/"/g, '""')}"`, // Wrap in quotes, escape quotes
+        formatted.gender,
+        formatted.gender_probability,
+        formatted.age,
+        formatted.age_group,
+        formatted.country_id || '',
+        `"${(formatted.country_name || '').replace(/"/g, '""')}"`,
+        formatted.country_probability || '',
+        formatted.created_at,
+      ];
+      csv += row.join(',') + '\n';
+    }
+
+    // ── Set response headers for file download ──
+    const timestamp = Date.now();
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="profiles_${timestamp}.csv"`);
+
+    return res.status(200).send(csv);
+
+  } catch (error) {
+    console.error('Error in exportCSV:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Internal server error',
+    });
+  }
+}
+
 // Export all functions so the routes file can use them
-module.exports = { createProfile, getProfile, getAllProfiles, deleteProfile, searchProfilesNLQ };
+module.exports = { createProfile, getProfile, getAllProfiles, deleteProfile, searchProfilesNLQ, exportCSV };

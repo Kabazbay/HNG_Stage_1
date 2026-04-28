@@ -1,138 +1,110 @@
-# 🚀 HNG Stage 1 — Profile Intelligence API
+# 🚀 Insighta Labs+: Secure Access & Multi-Interface Integration
 
-[![Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?logo=vercel)](https://hng-stage-1-coral.vercel.app)
-[![Node.js](https://img.shields.io/badge/Node.js-v18+-green?logo=node.js)](https://nodejs.org)
-[![MongoDB](https://img.shields.io/badge/Database-MongoDB%20Atlas-blue?logo=mongodb)](https://mongodb.com)
+[![Backend CI](https://img.shields.io/github/actions/workflow/status/<user>/<repo>/ci.yml?label=backend%20ci)](https://github.com/<user>/<repo>/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A high-performance REST API that leverages intelligence from multiple external sources (Genderize, Agify, Nationalize) to build and persist detailed user profiles with advanced classification logic.
+Insighta Labs+ is a comprehensive Profile Intelligence System that aggregates demographic data, provides advanced querying capabilities (including natural language search), and enforces secure, role-based access across multiple interfaces (CLI and Web).
 
-## 🌟 Key Features
+## 🏗️ System Architecture
 
-- **Multi-API Integration**: Aggregates data from 3 distinct intelligence APIs in parallel.
-- **Data Persistence**: Uses MongoDB Atlas for reliable profile storage.
-- **Classification Engine**: Automatically categorizes profiles into age groups and identifies primary nationality.
-- **Idempotency**: Smart handling of duplicate requests to prevent redundant data.
-- **UUID v7**: Future-proof, time-ordered identifiers for every record.
-- **Advanced Filtering**: Search profiles by gender, country, or age group with case-insensitive support.
+The platform is structured into three distinct components that communicate with a unified Backend API:
 
-## 🛠️ Tech Stack
+1.  **Backend API (Node.js/Express)**: The core engine handling data persistence (MongoDB), external API orchestration, authentication logic, and role enforcement.
+2.  **CLI Tool (Node.js/Commander)**: A globally installable terminal application for engineers and power users, featuring session persistence and auto-refreshing tokens.
+3.  **Web Portal (React/Vite)**: A modern, dark-mode dashboard for non-technical analysts to visualize data, manage profiles, and perform searches.
 
-- **Runtime**: Node.js & Express
-- **Database**: MongoDB Atlas via Mongoose
-- **Deployment**: Vercel (Serverless Functions)
-- **External Intelligence**:
-  - `api.genderize.io`
-  - `api.agify.io`
-  - `api.nationalize.io`
-
-## Setup
-
-1. Clone the repository:
-   ```bash
-   git clone <your-repo-url>
-   cd HNG_Stage_1
-   ```
-
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-3. Create a `.env` file in the root directory:
-   ```
-   PORT=3000
-   MONGODB_URI=your_mongodb_atlas_connection_string
-   ```
-
-4. Start the server:
-   ```bash
-   npm start
-   ```
-
-## API Endpoints
-
-### Create Profile
+```mermaid
+graph TB
+    subgraph "Clients"
+        CLI["CLI Tool<br/>(Terminal)"]
+        WEB["Web Portal<br/>(Browser)"]
+    end
+    
+    subgraph "Backend API"
+        AUTH["/auth/* routes"]
+        V1["/api/v1/profiles/*"]
+        MW["Middleware<br/>(Auth, RBAC, Rate Limit, Logging)"]
+    end
+    
+    subgraph "Data & External"
+        GH["GitHub OAuth"]
+        DB["MongoDB Atlas"]
+        EXT["Intelligence APIs<br/>(Genderize/Agify/Nat.)"]
+    end
+    
+    CLI -->|"Bearer Token"| MW
+    WEB -->|"HTTP-only Cookie"| MW
+    MW --> AUTH
+    MW --> V1
+    AUTH --> GH
+    V1 --> DB
+    V1 --> EXT
 ```
-POST /api/profiles
-Content-Type: application/json
 
-{ "name": "ella" }
+## 🔐 Authentication Flow
+
+We implement **GitHub OAuth 2.0 with PKCE** (Proof Key for Code Exchange) to ensure secure login across both CLI and Browser.
+
+1.  **Initiation**: User clicks login (Web) or runs `insighta login` (CLI).
+2.  **PKCE Generation**: Backend generates a `code_verifier` and a `code_challenge`.
+3.  **GitHub Authorization**: User is redirected to GitHub. After approval, GitHub redirects back with an authorization `code`.
+4.  **Token Exchange**: Backend exchanges the `code` + `code_verifier` for a GitHub token, fetches user data, and generates internal JWTs.
+5.  **Session Establishment**:
+    *   **CLI**: Returns tokens as JSON; stored at `~/.insighta/credentials.json`.
+    *   **Web**: Sets **HTTP-only, Secure, SameSite** cookies.
+
+## 🎫 Token Handling Approach
+
+*   **Access Token**: Short-lived (15 minutes). Used for every request.
+*   **Refresh Token**: Long-lived (7 days). Stored in the database (hashed) and sent only to `/auth/refresh` to obtain new access tokens.
+*   **CLI Auto-Refresh**: The CLI `apiClient` uses an interceptor to detect `401 Unauthorized` errors, automatically calls the refresh endpoint, updates local storage, and retries the original request seamlessly.
+*   **Web Auto-Refresh**: Similar interceptor logic using `axios` defaults to manage cookie-based sessions.
+
+## 👮 Role Enforcement Logic
+
+We use a Role-Based Access Control (RBAC) middleware (`authorize.js`) that checks the `role` claim in the verified JWT.
+
+| Role | Permissions |
+| :--- | :--- |
+| **Admin** | Full access: Create, Read, Delete, Search, Export. |
+| **Analyst** | Read-only access: List, Get, Search, Export. |
+
+*Roles are assigned upon first login based on the `ADMIN_GITHUB_USERNAMES` environment variable.*
+
+## 🧠 Natural Language Parsing Approach
+
+The `nlpParser.js` utility uses a rule-based tokenization strategy to convert plain English into database filters:
+
+*   **Tokenization**: Splits query and filters out "stop words" (e.g., "and", "the").
+*   **Pattern Matching**: Maps keywords like "males", "young", "from Nigeria" to API parameters (`gender=male`, `min_age=16`, `country_id=NG`).
+*   **Location Mapping**: Uses the `country-list` package to resolve country names to ISO codes.
+*   **Age Logic**: Handles comparative phrases like "over 30" or "under 20".
+
+## 💻 CLI Usage
+
+The CLI is globally installable and manages its own configuration.
+
+```bash
+# Install
+npm install -g ./insighta-cli
+
+# Auth
+insighta login
+insighta whoami
+
+# Profiles
+insighta profiles list --gender male --country NG
+insighta profiles search "young females from US"
+insighta profiles export --format csv
 ```
-Returns `201 Created` with the full profile data.
-If the name already exists, returns `200 OK` with the existing profile.
 
-### Get Single Profile
-```
-GET /api/profiles/{id}
-```
-Returns `200 OK` with the profile data.
+## 🚀 Deployment
 
-### Get All Profiles
-```
-GET /api/profiles
-GET /api/profiles?gender=male
-GET /api/profiles?country_id=NG
-GET /api/profiles?age_group=adult
-GET /api/profiles?gender=female&country_id=US&age_group=adult
-```
-All query parameters are optional and case-insensitive.
+*   **Backend**: Deployed on Vercel.
+*   **Web Portal**: Deployed on Vercel.
+*   **Database**: MongoDB Atlas.
 
-### Delete Profile
-```
-DELETE /api/profiles/{id}
-```
-Returns `204 No Content` on success.
+## 🛠️ Environment Variables
 
-## Classification Rules
-
-| Age Range | Age Group  |
-|-----------|------------|
-| 0–12      | child      |
-| 13–19     | teenager   |
-| 20–59     | adult      |
-| 60+       | senior     |
-
-Nationality is determined by the country with the highest probability from the Nationalize API.
-
-## Error Responses
-
-| Status | Meaning                          |
-|--------|----------------------------------|
-| 400    | Missing or empty name / Parsing Error|
-| 404    | Profile not found                |
-| 422    | Invalid type (name is not a string) |
-| 502    | External API returned invalid data |
-| 500    | Internal server error            |
-
-## 🧠 Natural Language Parser (Stage 2)
-
-The system includes a rule-based Natural Language Search Endpoint (`GET /api/profiles/search?q=...`) to convert plain English strings into database filters.
-
-### Approach & Mappings
-
-The parser splits the query string into tokens, removes common "stop words" (`and`, `who`, `are`, `in`, `with`, etc.), and iterates through the tokens matching known patterns:
-
-- **Gender:** 
-  - `male`, `males`, `men`, `boy`, `boys` ➡️ `gender=male`
-  - `female`, `females`, `women`, `girl`, `girls` ➡️ `gender=female`
-- **Age Aliases:** 
-  - `young` ➡️ `min_age=16`, `max_age=24` (Note: internal mapping for queries only)
-- **Age Groups:** 
-  - `child`, `children` ➡️ `age_group=child`
-  - `teenager`, `teenagers`, `teen`, `teens` ➡️ `age_group=teenager`
-  - `adult`, `adults` ➡️ `age_group=adult`
-  - `senior`, `seniors` ➡️ `age_group=senior`
-- **Age Relations:** 
-  - `above X`, `over X`, `older than X` ➡️ `min_age = X + 1`
-  - `under X`, `below X`, `younger than X` ➡️ `max_age = X - 1`
-- **Location:** 
-  - `from [CountryName]` ➡️ The `[CountryName]` is passed to the `country-list` npm package to extract the 2-letter ISO code (`country_id`). E.g., `from nigeria` ➡️ `country_id=NG`.
-
-### Limitations & Edge Cases Not Handled
-
-Because the parser is strictly rule-based without an LLM:
-1. **OR/Complex Logic:** It cannot comprehend "OR" conditions (e.g., "males from nigeria OR females from kenya"). It treats everything as an "AND" condition.
-2. **Ambiguous Locations:** Multi-word country names are partially supported (checks up to 3 words ahead), but complex location phrases with typos might fail to map to proper ISO codes.
-3. **Compound Age Relations:** Ranges described as "between 20 and 30" are not currently supported; only simple comparative boundaries like "above 20" or "under 30".
-4. **Out of vocabulary words:** If a phrase like "middle-aged folks" is used, the system has no rule matching it to `adult` and will simply ignore those words. If the entire query results in 0 parsed filters, it returns a 400 Error ("Unable to interpret query").
+Required variables in `.env`:
+* `MONGODB_URI`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `JWT_SECRET`, `FRONTEND_URL`, `ADMIN_GITHUB_USERNAMES`.

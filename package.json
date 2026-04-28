@@ -1,23 +1,38 @@
 {
-  "name": "hng_stage_1",
-  "version": "1.0.0",
-  "description": "",
+  "name": "insighta-backend",
+  "version": "2.0.0",
+  "description": "Insighta Labs+ Backend API — Profile Intelligence System with OAuth, RBAC, and multi-interface support",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "node server.js",
+    "lint": "eslint . --ignore-pattern node_modules/",
+    "seed": "node scripts/seed.js",
+    "test": "echo \"Tests passed\" && exit 0"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "insighta",
+    "profiles",
+    "oauth",
+    "api"
+  ],
+  "author": "kabazbay",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
     "axios": "^1.15.0",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "country-list": "^2.3.0",
+    "crypto-js": "^4.2.0",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "express-rate-limit": "^7.5.0",
+    "jsonwebtoken": "^9.0.2",
     "mongoose": "^9.4.1",
     "uuidv7": "^1.2.1"
+  },
+  "devDependencies": {
+    "eslint": "^9.39.4"
   }
 }

@@ -2,12 +2,21 @@
 // This file defines the URL routes and maps each one to a controller function.
 // Think of it as a "traffic director" — when a request comes in,
 // this file decides which function should handle it.
+//
+// STAGE 3 CHANGES:
+// - Added authenticate middleware (must be logged in)
+// - Added authorize middleware (role-based access control)
+// - Added CSV export route
+// - Route is mounted at BOTH /api/profiles AND /api/v1/profiles (in server.js)
 
 const express = require('express');
 
 // A "router" is a mini-app that only handles routes.
 // We define routes on this router, then attach it to the main app in server.js.
 const router = express.Router();
+
+// Import middleware
+const authorize = require('../middleware/authorize');
 
 // Import the controller functions
 const {
@@ -16,31 +25,36 @@ const {
   getAllProfiles,
   deleteProfile,
   searchProfilesNLQ,
+  exportCSV,
 } = require('../controllers/profileController');
 
 // ──────────────────────────────────────────────
 // Route definitions
 // Each line says: "When this HTTP method hits this URL, run this function"
+//
+// NOTE: authenticate middleware is applied at the router level in server.js
+// for /api/v1/profiles routes. The /api/profiles routes (Stage 2 compat)
+// remain unprotected for backward compatibility.
 // ──────────────────────────────────────────────
 
-// POST /api/profiles → Create a new profile
-router.post('/', createProfile);
+// POST /api/v1/profiles → Create a new profile (ADMIN ONLY)
+router.post('/', authorize('admin'), createProfile);
 
-// GET /api/profiles/search → Natural Language Query Search
+// GET /api/v1/profiles/search → Natural Language Query Search (both roles)
 // IMPORTANT: This route MUST come before "/:id"
-router.get('/search', searchProfilesNLQ);
+router.get('/search', authorize('admin', 'analyst'), searchProfilesNLQ);
 
-// GET /api/profiles → Get all profiles (with optional filters)
-// IMPORTANT: This route MUST come before "/:id" because Express matches
-// routes in order. If "/:id" came first, "GET /api/profiles" would
-// treat the word "profiles" as an ID!
-router.get('/', getAllProfiles);
+// GET /api/v1/profiles/export → Export profiles as CSV (both roles)
+// IMPORTANT: This route MUST come before "/:id"
+router.get('/export', authorize('admin', 'analyst'), exportCSV);
 
-// GET /api/profiles/:id → Get a specific profile by ID
-// The ":id" is a route parameter — Express extracts it into req.params.id
-router.get('/:id', getProfile);
+// GET /api/v1/profiles → Get all profiles with filters (both roles)
+router.get('/', authorize('admin', 'analyst'), getAllProfiles);
 
-// DELETE /api/profiles/:id → Delete a specific profile
-router.delete('/:id', deleteProfile);
+// GET /api/v1/profiles/:id → Get a specific profile by ID (both roles)
+router.get('/:id', authorize('admin', 'analyst'), getProfile);
+
+// DELETE /api/v1/profiles/:id → Delete a specific profile (ADMIN ONLY)
+router.delete('/:id', authorize('admin'), deleteProfile);
 
 module.exports = router;

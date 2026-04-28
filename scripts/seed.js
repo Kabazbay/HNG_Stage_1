@@ -1,12 +1,15 @@
 // scripts/seed.js
 // This script reads 'seed-profiles.json' and inserts the data into MongoDB Atlas.
+// It also ensures that the admin user specified in .env exists in the database.
 // Idempotency: Uses updateOne with upsert=true so it won't duplicate data if run multiple times.
 
 require('dotenv').config();
 const mongoose = require('mongoose');
 const Profile = require('../models/Profile');
+const User = require('../models/User');
 const fs = require('fs');
 const path = require('path');
+const { uuidv7 } = require('uuidv7');
 
 const SEED_FILE = path.join(__dirname, '../seed-profiles.json');
 
@@ -44,18 +47,18 @@ async function runSeeder() {
     process.exit(1);
   }
 
+  // ──────────────────────────────────────────────
+  // 1. Seed Profiles
+  // ──────────────────────────────────────────────
   console.log(`🌱 Seeding ${profilesArray.length} profiles...`);
   
   let inserted = 0;
   let updated = 0;
 
-  const { uuidv7 } = require('uuidv7');
-
   for (const p of profilesArray) {
     try {
-      // Create document payload. Generate a new UUID if 'id' is missing.
-      const docId = p.id || uuidv7();
       const profileName = p.name.toLowerCase().trim();
+      const docId = p.id || uuidv7();
 
       const docToUpdate = {
         name: profileName,
@@ -69,27 +72,45 @@ async function runSeeder() {
         created_at: p.created_at ? new Date(p.created_at) : new Date()
       };
 
-      // Upsert based on `name` since it is marked UNIQUE in the schema.
       const result = await Profile.updateOne(
         { name: profileName },
         { $set: docToUpdate, $setOnInsert: { _id: docId } },
         { upsert: true }
       );
 
-      if (result.upsertedCount > 0) {
-        inserted++;
-      } else if (result.modifiedCount > 0) {
-        updated++;
-      }
+      if (result.upsertedCount > 0) inserted++;
+      else if (result.modifiedCount > 0) updated++;
     } catch (err) {
       console.error(`⚠️ Error upserting profile ${p.name}:`, err.message);
     }
   }
 
-  console.log(`\n🎉 Seeding complete!`);
-  console.log(`- Inserted new profiles: ${inserted}`);
-  console.log(`- Updated existing profiles: ${updated}`);
-  
+  console.log(`🎉 Profiles: ${inserted} inserted, ${updated} updated.`);
+
+  // ──────────────────────────────────────────────
+  // 2. Seed Admin User
+  // ──────────────────────────────────────────────
+  const adminUsername = (process.env.ADMIN_GITHUB_USERNAMES || 'kabazbay').split(',')[0].trim();
+  if (adminUsername) {
+    console.log(`🔐 Seeding admin user: ${adminUsername}...`);
+    try {
+      await User.updateOne(
+        { username: adminUsername.toLowerCase() },
+        { 
+          $set: { role: 'admin' },
+          $setOnInsert: { 
+            github_id: 'seed-admin-' + adminUsername,
+            created_at: new Date()
+          }
+        },
+        { upsert: true }
+      );
+      console.log(`✅ Admin user "${adminUsername}" is ready.`);
+    } catch (err) {
+      console.error(`⚠️ Error seeding admin user:`, err.message);
+    }
+  }
+
   await mongoose.disconnect();
   console.log(`\n👋 Disconnected from MongoDB Atlas`);
   process.exit(0);
