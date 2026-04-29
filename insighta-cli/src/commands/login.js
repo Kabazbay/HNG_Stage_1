@@ -55,47 +55,45 @@ function registerLogin(program) {
             const url = new URL(req.url, `http://localhost:${CALLBACK_PORT}`);
 
             if (url.pathname === '/callback') {
-              const code = url.searchParams.get('code');
-              const returnedState = url.searchParams.get('state');
+              const accessToken = url.searchParams.get('access_token');
+              const refreshToken = url.searchParams.get('refresh_token');
+              const userJson = url.searchParams.get('user');
 
-              if (!code) {
+              if (!accessToken || !refreshToken) {
                 res.writeHead(400, { 'Content-Type': 'text/html' });
-                res.end('<h1>Login Failed</h1><p>No authorization code received.</p>');
-                reject(new Error('No authorization code received'));
+                res.end('<h1>Login Failed</h1><p>Missing tokens from server.</p>');
+                reject(new Error('No tokens received from server'));
                 server.close();
                 return;
               }
 
               try {
-                // Forward the code to our backend's callback endpoint
-                const tokenResponse = await axios.get(
-                  `${API_BASE_URL}/auth/github/callback`,
-                  {
-                    params: { code, state: returnedState },
-                    maxRedirects: 0, // Don't follow redirects
-                    validateStatus: (status) => status < 500,
-                  }
-                );
-
-                if (tokenResponse.data && tokenResponse.data.data) {
-                  res.writeHead(200, { 'Content-Type': 'text/html' });
-                  res.end(`
-                    <html>
-                      <body style="font-family: sans-serif; text-align: center; padding: 50px;">
-                        <h1>✅ Login Successful!</h1>
-                        <p>You can close this window and return to the terminal.</p>
-                      </body>
-                    </html>
-                  `);
-                  resolve(tokenResponse.data.data);
-                } else {
-                  res.writeHead(400, { 'Content-Type': 'text/html' });
-                  res.end('<h1>Login Failed</h1><p>Could not get tokens from server.</p>');
-                  reject(new Error('Failed to get tokens'));
+                // Parse user info if available
+                let user = {};
+                try {
+                  if (userJson) user = JSON.parse(userJson);
+                } catch (e) {
+                  console.error('Failed to parse user info');
                 }
+
+                res.writeHead(200, { 'Content-Type': 'text/html' });
+                res.end(`
+                  <html>
+                    <body style="font-family: sans-serif; text-align: center; padding: 50px; background: #0f172a; color: white;">
+                      <h1 style="color: #38bdf8;">✅ Login Successful!</h1>
+                      <p>You have been authenticated. You can close this window and return to the terminal.</p>
+                    </body>
+                  </html>
+                `);
+                
+                resolve({
+                  access_token: accessToken,
+                  refresh_token: refreshToken,
+                  user: user
+                });
               } catch (err) {
                 res.writeHead(500, { 'Content-Type': 'text/html' });
-                res.end('<h1>Login Failed</h1><p>Server error.</p>');
+                res.end('<h1>Login Failed</h1><p>Internal error.</p>');
                 reject(err);
               }
 

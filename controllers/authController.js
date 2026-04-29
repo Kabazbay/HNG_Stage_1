@@ -236,7 +236,14 @@ async function githubCallback(req, res) {
       const params = new URLSearchParams({
         access_token: accessToken,
         refresh_token: refreshToken,
-        status: 'success'
+        status: 'success',
+        user: JSON.stringify({
+          id: user._id,
+          username: user.username,
+          email: user.email,
+          role: user.role,
+          avatar_url: user.avatarUrl,
+        })
       });
       return res.redirect(`http://localhost:9876/callback?${params.toString()}`);
     } else {
