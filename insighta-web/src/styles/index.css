@@ -109,6 +109,8 @@ body {
 .btn-sm { padding: 6px 14px; font-size: 13px; }
 .btn-primary { background: var(--accent); border-color: var(--accent); color: white; }
 .btn-primary:hover { background: var(--accent-hover); }
+.btn-success { background: var(--green); border-color: var(--green); color: white; }
+.btn-success:hover { opacity: 0.9; }
 .btn-danger { background: var(--red); border-color: var(--red); color: white; }
 .btn-danger:hover { opacity: 0.9; }
 .btn-back { margin-bottom: 20px; }

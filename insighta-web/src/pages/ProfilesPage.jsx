@@ -39,6 +39,33 @@ function ProfilesPage() {
     }
   }
 
+  async function handleExport() {
+    try {
+      const params = { ...filters, format: 'csv' };
+      // Remove empty string params
+      Object.keys(params).forEach(k => {
+        if (params[k] === '') delete params[k];
+      });
+
+      const res = await api.get('/api/v1/profiles/export', {
+        params,
+        responseType: 'blob', // Important for file downloads
+      });
+
+      // Create a link and trigger download
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `profiles_${Date.now()}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err) {
+      console.error('Export failed:', err);
+      alert('Failed to export CSV. Check console for details.');
+    }
+  }
+
   useEffect(() => {
     fetchProfiles();
   }, []);
@@ -130,6 +157,9 @@ function ProfilesPage() {
 
         <button type="submit" className="btn btn-primary btn-sm">Apply</button>
         <button type="button" className="btn btn-sm" onClick={handleClearFilters}>Clear</button>
+        <button type="button" className="btn btn-sm btn-success" onClick={handleExport} style={{ marginLeft: 'auto' }}>
+          Export CSV
+        </button>
       </form>
 
       {/* Profiles Table */}
