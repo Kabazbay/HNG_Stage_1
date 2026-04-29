@@ -6,9 +6,8 @@ const path = require('path');
 const os = require('os');
 
 module.exports = {
-  // The URL of your backend API
-  // Change this to your deployed backend URL
-  API_BASE_URL: process.env.INSIGHTA_API_URL || 'http://localhost:3000',
+  // The URL of your backend API (proxied through the frontend)
+  API_BASE_URL: process.env.INSIGHTA_API_URL || 'https://hng-stage-1-742d.vercel.app',
 
   // Where credentials (tokens) are stored on the user's computer
   // ~/.insighta/credentials.json
