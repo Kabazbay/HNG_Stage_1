@@ -231,22 +231,14 @@ async function githubCallback(req, res) {
 
     // ── STEP 6: Return tokens based on client type ──
     if (clientType === 'cli') {
-      // CLI: return tokens as JSON
-      return res.status(200).json({
-        status: 'success',
-        message: 'Login successful',
-        data: {
-          access_token: accessToken,
-          refresh_token: refreshToken,
-          user: {
-            id: user._id,
-            username: user.username,
-            email: user.email,
-            role: user.role,
-            avatar_url: user.avatarUrl,
-          },
-        },
+      // CLI: Redirect back to the local CLI server with tokens in the URL
+      // The CLI listens on port 9876 for this callback.
+      const params = new URLSearchParams({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        status: 'success'
       });
+      return res.redirect(`http://localhost:9876/callback?${params.toString()}`);
     } else {
       // Web Portal: set tokens as HTTP-only cookies and redirect
       // On Vercel, we MUST use SameSite=None and Secure=true for cross-subdomain cookies
