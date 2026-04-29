@@ -199,8 +199,8 @@ app.get('/', (req, res) => {
   });
 });
 
-// ── Auth routes (with stricter rate limiting) ──
-app.use('/auth', authLimiter, authRoutes);
+// ── Auth routes (rate limits applied inside authRoutes) ──
+app.use('/auth', authRoutes);
 
 // ── User routes (for /api/users/me) ──
 app.use('/api/users', generalLimiter, userRoutes);

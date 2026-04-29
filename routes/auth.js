@@ -14,6 +14,7 @@ const express = require('express');
 const router = express.Router();
 const authenticate = require('../middleware/authenticate');
 
+const { authLimiter } = require('../middleware/rateLimiter');
 const {
   githubAuth,
   githubCallback,
@@ -23,10 +24,10 @@ const {
   getCsrfToken,
 } = require('../controllers/authController');
 
-// ── Public routes (no authentication needed) ──
-router.get('/github', githubAuth);              // Start OAuth
-router.get('/github/callback', githubCallback); // OAuth callback
-router.post('/refresh', refreshToken);          // Refresh tokens
+// ── Public routes (rate limiting applied per endpoint) ──
+router.get('/github', authLimiter, githubAuth);
+router.get('/github/callback', authLimiter, githubCallback);
+router.post('/refresh', authLimiter, refreshToken);
 router.all('/refresh', (req, res) => {
   res.status(405).json({ status: 'error', message: 'Method Not Allowed. Use POST.' });
 });

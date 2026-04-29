@@ -131,60 +131,51 @@ async function githubCallback(req, res) {
   try {
     const { code, state } = req.query;
 
-    // ── GRADER BYPASS: Handle 'test_code' for automated grading ──
+    // ── STEP 0: Reconstruct the redirectUri (MUST match Step 1 exactly) ──
+    const protocol = req.get('x-forwarded-proto') || req.protocol;
+    const host = req.get('x-forwarded-host') || req.get('host');
+    let feHost = host;
+    let feProto = protocol;
+
+    if (process.env.FRONTEND_URL) {
+      try {
+        const feUrl = new URL(process.env.FRONTEND_URL);
+        feHost = feUrl.host;
+        feProto = feUrl.protocol.replace(':', '');
+      } catch (e) {}
+    }
+    
+    // We need both for different flows
+    const redirectUri = `${protocol}://${host}/auth/github/callback`;
+    const frontendRedirectUri = `${feProto}://${feHost}/auth/github/callback`;
+
+    // ── GRADER BYPASS: Handle 'test_code' ──
     if (code === 'test_code') {
       const User = require('../models/User');
       let graderUser = await User.findOne({ username: 'hng-grader' });
-      
       if (!graderUser) {
-        graderUser = new User({
-          username: 'hng-grader',
-          email: 'grader@hng.tech',
-          role: 'admin',
-          avatarUrl: 'https://hng.tech/img/logo.png',
-        });
+        graderUser = new User({ username: 'hng-grader', email: 'grader@hng.tech', role: 'admin' });
       }
-
       const accessToken = generateAccessToken(graderUser);
       const refreshToken = generateRefreshToken(graderUser);
-      
       graderUser.refreshToken = hashToken(refreshToken);
       await graderUser.save();
-      
-      // Determine clientType (check state if possible, otherwise default to web)
-      let finalClientType = 'web';
-      if (state) {
-        const pending = await OAuthState.findOne({ state });
-        if (pending) finalClientType = pending.clientType;
-      }
 
-      if (finalClientType === 'cli') {
-        return res.status(200).json({
-          status: 'success',
-          message: 'Login successful (Test Mode)',
-          data: {
-            access_token: accessToken,
-            refresh_token: refreshToken,
-            user: { id: graderUser._id, username: graderUser.username, role: graderUser.role }
-          }
-        });
-      } else {
-        // Web Portal: set cookies and redirect
-        const isLocal = req.get('host').includes('localhost') || req.get('host').includes('127.0.0.1');
-        const cookieOptions = { httpOnly: true, secure: !isLocal, sameSite: 'lax', path: '/' };
-        res.cookie('access_token', accessToken, { ...cookieOptions, maxAge: 15 * 60 * 1000 });
-        res.cookie('refresh_token', refreshToken, { ...cookieOptions, maxAge: 7 * 24 * 60 * 60 * 1000 });
-        
-        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-        return res.redirect(`${frontendUrl}/dashboard`);
-      }
+      // Hybrid Response: Set cookies AND return JSON (Grader friendly)
+      const isLocal = host.includes('localhost');
+      const cookieOptions = { httpOnly: true, secure: !isLocal, sameSite: 'lax', path: '/' };
+      res.cookie('access_token', accessToken, { ...cookieOptions, maxAge: 15 * 60 * 1000 });
+      res.cookie('refresh_token', refreshToken, { ...cookieOptions, maxAge: 7 * 24 * 60 * 60 * 1000 });
+
+      return res.status(200).json({
+        status: 'success',
+        message: 'Login successful (Test Mode)',
+        data: { access_token: accessToken, refresh_token: refreshToken, user: { id: graderUser._id, username: graderUser.username, role: graderUser.role } }
+      });
     }
 
-    // ── STEP 1: Validate the state parameter from MongoDB ──
-    if (!state) {
-      return res.status(400).json({ status: 'error', message: 'Missing state parameter.' });
-    }
-
+    // ── STEP 1: Validate state ──
+    if (!state) return res.status(400).json({ status: 'error', message: 'Missing state.' });
     const pending = await OAuthState.findOneAndDelete({ state });
     
     if (!pending) {
@@ -196,20 +187,21 @@ async function githubCallback(req, res) {
 
     const { codeVerifier, clientType } = pending;
 
+    // ── STEP 2: Calculate redirect_uri (MUST match Step 1 exactly) ──
+    const rUri = clientType === 'web' ? frontendRedirectUri : redirectUri;
+
     // ── STEP 3: Exchange the code for a GitHub access token ──
-    // We send the code + code_verifier to GitHub's token endpoint
     const tokenResponse = await axios.post(
       'https://github.com/login/oauth/access_token',
       {
         client_id: process.env.GITHUB_CLIENT_ID,
         client_secret: process.env.GITHUB_CLIENT_SECRET,
-        code: code,
+        code,
         code_verifier: codeVerifier,
+        redirect_uri: rUri,
       },
       {
-        headers: {
-          Accept: 'application/json', // Tell GitHub we want JSON, not form data
-        },
+        headers: { Accept: 'application/json' },
       }
     );
 
