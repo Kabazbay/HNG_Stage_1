@@ -85,13 +85,18 @@ async function githubAuth(req, res) {
     });
 
     // ── STEP 4: Build the GitHub authorization URL ──
+    // Use the current host (proxied or direct) for the redirect URI
+    const protocol = req.get('x-forwarded-proto') || req.protocol;
+    const host = req.get('host');
+    const redirectUri = `${protocol}://${host}/auth/github/callback`;
+
     const params = new URLSearchParams({
       client_id: process.env.GITHUB_CLIENT_ID,
-      redirect_uri: `${process.env.BACKEND_URL || req.protocol + '://' + req.get('host')}/auth/github/callback`,
-      scope: 'read:user user:email', // What data we want from GitHub
+      redirect_uri: redirectUri,
+      scope: 'read:user user:email',
       state: state,
       code_challenge: codeChallenge,
-      code_challenge_method: 'S256', // SHA-256 hashing method
+      code_challenge_method: 'S256',
     });
 
     const githubUrl = `https://github.com/login/oauth/authorize?${params.toString()}`;
