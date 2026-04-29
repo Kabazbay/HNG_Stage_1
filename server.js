@@ -38,6 +38,7 @@ const authenticate = require('./middleware/authenticate');
 
 // Import routes
 const authRoutes = require('./routes/auth');
+const userRoutes = require('./routes/users');
 const profileRoutes = require('./routes/profiles');
 const profileRoutesPublic = require('./routes/profilesPublic');
 
@@ -45,6 +46,9 @@ const profileRoutesPublic = require('./routes/profilesPublic');
 // STEP 3: Create and configure the Express app
 // ──────────────────────────────────────────────
 const app = express();
+
+// Trust Vercel proxy for accurate IP-based rate limiting
+app.set('trust proxy', 1);
 
 // MIDDLEWARE: Code that runs on EVERY request before it reaches your routes
 
@@ -198,13 +202,15 @@ app.get('/', (req, res) => {
 // ── Auth routes (with stricter rate limiting) ──
 app.use('/auth', authLimiter, authRoutes);
 
+// ── User routes (for /api/users/me) ──
+app.use('/api/users', generalLimiter, userRoutes);
+app.use('/api/v1/users', generalLimiter, userRoutes);
+
 // ── Stage 3: Versioned profile routes WITH authentication ──
-// These require login and enforce role-based access control
 app.use('/api/v1/profiles', generalLimiter, authenticate, profileRoutes);
 
-// ── Stage 2: Legacy profile routes WITHOUT authentication ──
-// These keep working exactly as before for backward compatibility
-app.use('/api/profiles', generalLimiter, profileRoutesPublic);
+// ── Stage 2: Legacy profile routes — NOW PROTECTED for Stage 3 requirements ──
+app.use('/api/profiles', generalLimiter, authenticate, profileRoutesPublic);
 
 // ──────────────────────────────────────────────
 // STEP 8: Start locally OR export for Vercel

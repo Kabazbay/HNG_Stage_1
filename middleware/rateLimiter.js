@@ -1,46 +1,29 @@
-// middleware/rateLimiter.js
-// This middleware limits how many requests a user can make in a time window.
-//
-// WHY?
-// Without rate limiting, someone could:
-//   - Spam your login endpoint trying to break in (brute force)
-//   - Flood your API with requests and crash your server (DoS attack)
-//
-// THE RULES (from TRD):
-//   - Auth endpoints (/auth/*): 10 requests per minute
-//   - All other endpoints: 60 requests per minute per user
-//
-// WHAT HAPPENS WHEN EXCEEDED:
-//   Returns HTTP 429 "Too Many Requests" with a message
-
 const rateLimit = require('express-rate-limit');
 
 // ── Rate limiter for auth endpoints ──
-// Strict limit: only 100 requests per 15 minutes
-// This prevents brute force login attempts
+// Strict limit: only 10 requests per minute
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100,              // Maximum 100 requests per window
-  standardHeaders: true, // Send rate limit info in response headers (X-RateLimit-*)
-  legacyHeaders: false,  // Don't send old X-RateLimit-* headers
-
-  // Custom response when limit is exceeded
+  windowMs: 60 * 1000,  // 1 minute
+  max: 10,              // Maximum 10 requests per window
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.method === 'OPTIONS',
   handler: (req, res) => {
     res.status(429).json({
       status: 'error',
-      message: 'Too many requests. Please try again later.',
+      message: 'Too many login attempts. Please try again later.',
     });
   },
 });
 
 // ── Rate limiter for all other endpoints ──
-// More lenient: 300 requests per 15 minutes
+// More lenient: 60 requests per minute
 const generalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 300,              // Maximum 300 requests per window
+  windowMs: 60 * 1000,  // 1 minute
+  max: 60,              // Maximum 60 requests per window
   standardHeaders: true,
   legacyHeaders: false,
-
+  skip: (req) => req.method === 'OPTIONS',
   handler: (req, res) => {
     res.status(429).json({
       status: 'error',
