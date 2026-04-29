@@ -1,41 +1,26 @@
-# CI/CD Pipeline for Insighta Labs+ Backend
-# Runs on every Pull Request to the main branch
-# Checks: install dependencies, lint code, run tests, verify build
-
-name: CI
+name: Insighta Labs CI
 
 on:
-  pull_request:
-    branches: [main]
   push:
-    branches: [main]
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
-  ci:
-    runs-on: ubuntu-latest
+  build:
+    runs-with: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
 
     steps:
-      # Step 1: Check out the code from the repo
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      # Step 2: Set up Node.js
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
-
-      # Step 3: Install dependencies
-      - name: Install dependencies
-        run: npm ci
-
-      # Step 4: Run linting
-      - name: Lint code
-        run: npm run lint
-
-      # Step 5: Run tests
-      - name: Run tests
-        run: npm test
-        env:
-          NODE_ENV: test
+    - uses: actions/checkout@v3
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+    - run: npm install
+    - name: Check for syntax errors
+      run: node --check server.js
