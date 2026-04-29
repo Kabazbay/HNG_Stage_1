@@ -65,9 +65,21 @@ async function githubAuth(req, res) {
     });
 
     // ── STEP 4: Build the GitHub authorization URL ──
-    // Use the x-forwarded-host (public frontend) if available, otherwise use direct host
-    const protocol = req.get('x-forwarded-proto') || req.protocol;
-    const host = req.get('x-forwarded-host') || req.get('host');
+    // Use the explicit FRONTEND_URL for web, otherwise detect from host
+    let protocol = req.get('x-forwarded-proto') || req.protocol;
+    let host = req.get('x-forwarded-host') || req.get('host');
+
+    // Force frontend domain for web clients to ensure cookie compatibility
+    if (clientType === 'web' && process.env.FRONTEND_URL) {
+      try {
+        const feUrl = new URL(process.env.FRONTEND_URL);
+        host = feUrl.host;
+        protocol = feUrl.protocol.replace(':', '');
+      } catch (e) {
+        // Fallback if URL is invalid
+      }
+    }
+
     const redirectUri = `${protocol}://${host}/auth/github/callback`;
 
     const params = new URLSearchParams({
