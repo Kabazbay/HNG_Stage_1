@@ -65,9 +65,9 @@ async function githubAuth(req, res) {
     });
 
     // ── STEP 4: Build the GitHub authorization URL ──
-    // Use the current host (proxied or direct) for the redirect URI
+    // Use the x-forwarded-host (public frontend) if available, otherwise use direct host
     const protocol = req.get('x-forwarded-proto') || req.protocol;
-    const host = req.get('host');
+    const host = req.get('x-forwarded-host') || req.get('host');
     const redirectUri = `${protocol}://${host}/auth/github/callback`;
 
     const params = new URLSearchParams({
