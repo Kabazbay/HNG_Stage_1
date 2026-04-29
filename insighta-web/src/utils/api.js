@@ -46,7 +46,9 @@ api.interceptors.request.use(async (config) => {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response && error.response.status === 401) {
+    const isLoginPage = window.location.pathname === '/login';
+
+    if (error.response && error.response.status === 401 && !isLoginPage) {
       // Try to refresh
       try {
         await axios.post(`${API_BASE}/auth/refresh`, {}, { withCredentials: true });
