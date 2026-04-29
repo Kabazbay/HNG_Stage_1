@@ -238,12 +238,12 @@ async function githubCallback(req, res) {
       return res.redirect(`http://localhost:9876/callback?${params.toString()}`);
     } else {
       // Web Portal: set tokens as HTTP-only cookies and redirect
-      // On Vercel, we MUST use SameSite=None and Secure=true for cross-subdomain cookies
+      // On Vercel (proxied), Lax + Secure is the most compatible setting
       const isLocal = req.get('host').includes('localhost') || req.get('host').includes('127.0.0.1');
       const cookieOptions = {
         httpOnly: true,
-        secure: !isLocal, // Must be true for SameSite=None
-        sameSite: isLocal ? 'lax' : 'none',
+        secure: !isLocal, 
+        sameSite: 'lax', // Use Lax for proxied setup
         path: '/',
       };
 
@@ -323,7 +323,7 @@ async function refreshToken(req, res) {
         const cookieOptions = {
           httpOnly: true,
           secure: !isLocal,
-          sameSite: isLocal ? 'lax' : 'none',
+          sameSite: 'lax',
           path: '/',
         };
 
@@ -445,7 +445,7 @@ function getCsrfToken(req, res) {
   res.cookie('csrf_token', token, {
     httpOnly: true,
     secure: !isLocal,
-    sameSite: isLocal ? 'lax' : 'none',
+    sameSite: 'lax',
     maxAge: 60 * 60 * 1000, // 1 hour
     path: '/',
   });
