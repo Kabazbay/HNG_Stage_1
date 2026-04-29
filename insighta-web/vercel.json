@@ -1,6 +1,17 @@
 {
   "version": 2,
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/api/:path*",
+      "destination": "https://hng-stage-1-eight-rose.vercel.app/api/:path*"
+    },
+    {
+      "source": "/auth/:path*",
+      "destination": "https://hng-stage-1-eight-rose.vercel.app/auth/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ]
 }

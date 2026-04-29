@@ -5,9 +5,9 @@
 
 import axios from 'axios';
 
-// In dev, Vite proxies /api and /auth to localhost:3000
-// In production, set this to your deployed backend URL
-const API_BASE = import.meta.env.VITE_API_URL || '';
+// In production, we use Vercel Rewrites (see vercel.json) to proxy /api and /auth
+// This keeps cookies on the same domain and avoids third-party cookie blocking.
+const API_BASE = ''; 
 
 const api = axios.create({
   baseURL: API_BASE,
