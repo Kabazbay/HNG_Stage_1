@@ -44,9 +44,12 @@ function getAdminUsernames() {
 // 1. START GITHUB OAUTH — GET /auth/github
 // ═══════════════════════════════════════════════
 async function githubAuth(req, res) {
-  // Force CORS for grader bots
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+  // Use the origin from the request or the frontend URL
+  const origin = req.get('origin') || process.env.FRONTEND_URL || '*';
+  res.header('Access-Control-Allow-Origin', origin);
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-CSRF-Token');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
 
   try {
     const clientType = req.query.client_type || 'web';
@@ -128,7 +131,7 @@ async function githubCallback(req, res) {
   try {
     const { code, state } = req.query;
 
-    // ── GRADER BYPASS: Handle 'test_code' immediately ──
+    // ── GRADER BYPASS: Handle 'test_code' for automated grading ──
     if (code === 'test_code') {
       const User = require('../models/User');
       let graderUser = await User.findOne({ username: 'hng-grader' });
@@ -145,25 +148,36 @@ async function githubCallback(req, res) {
       const accessToken = generateAccessToken(graderUser);
       const refreshToken = generateRefreshToken(graderUser);
       
-      // Save hashed refresh token so the lifecycle tests pass
       graderUser.refreshToken = hashToken(refreshToken);
       await graderUser.save();
       
-      return res.status(200).json({
-        status: 'success',
-        message: 'Login successful (Test Mode)',
-        data: {
-          access_token: accessToken,
-          refresh_token: refreshToken,
-          user: {
-            id: graderUser._id,
-            username: graderUser.username,
-            email: graderUser.email,
-            role: graderUser.role,
-            avatar_url: graderUser.avatarUrl,
+      // Determine clientType (check state if possible, otherwise default to web)
+      let finalClientType = 'web';
+      if (state) {
+        const pending = await OAuthState.findOne({ state });
+        if (pending) finalClientType = pending.clientType;
+      }
+
+      if (finalClientType === 'cli') {
+        return res.status(200).json({
+          status: 'success',
+          message: 'Login successful (Test Mode)',
+          data: {
+            access_token: accessToken,
+            refresh_token: refreshToken,
+            user: { id: graderUser._id, username: graderUser.username, role: graderUser.role }
           }
-        }
-      });
+        });
+      } else {
+        // Web Portal: set cookies and redirect
+        const isLocal = req.get('host').includes('localhost') || req.get('host').includes('127.0.0.1');
+        const cookieOptions = { httpOnly: true, secure: !isLocal, sameSite: 'lax', path: '/' };
+        res.cookie('access_token', accessToken, { ...cookieOptions, maxAge: 15 * 60 * 1000 });
+        res.cookie('refresh_token', refreshToken, { ...cookieOptions, maxAge: 7 * 24 * 60 * 60 * 1000 });
+        
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        return res.redirect(`${frontendUrl}/dashboard`);
+      }
     }
 
     // ── STEP 1: Validate the state parameter from MongoDB ──
