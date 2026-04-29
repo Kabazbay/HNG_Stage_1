@@ -30,22 +30,10 @@ const {
 // Maps: state → { codeVerifier, clientType, createdAt }
 // In production you'd use Redis, but for this project in-memory is fine.
 // ──────────────────────────────────────────────
-const pendingAuth = new Map();
-
-// Clean up expired entries every 5 minutes (entries expire after 10 min)
-setInterval(() => {
-  const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
-  for (const [key, value] of pendingAuth) {
-    if (value.createdAt < tenMinutesAgo) {
-      pendingAuth.delete(key);
-    }
-  }
-}, 5 * 60 * 1000);
+const OAuthState = require('../models/OAuthState');
 
 // ──────────────────────────────────────────────
 // List of GitHub usernames that should get the "admin" role.
-// You can also set this via the ADMIN_GITHUB_USERNAMES env variable.
-// Example .env: ADMIN_GITHUB_USERNAMES=kabazbay,someotheruser
 // ──────────────────────────────────────────────
 function getAdminUsernames() {
   const envAdmins = process.env.ADMIN_GITHUB_USERNAMES || '';
@@ -55,17 +43,11 @@ function getAdminUsernames() {
 // ═══════════════════════════════════════════════
 // 1. START GITHUB OAUTH — GET /auth/github
 // ═══════════════════════════════════════════════
-// This endpoint generates the GitHub authorization URL.
-// The CLI or web portal redirects the user to this URL.
 async function githubAuth(req, res) {
   try {
-    // client_type tells us if this request is from "cli" or "web"
-    // Default to "web" if not specified
     const clientType = req.query.client_type || 'web';
 
     // ── STEP 1: Generate PKCE values ──
-    // code_verifier: a random secret string (stays on our server)
-    // code_challenge: SHA-256 hash of code_verifier (sent to GitHub)
     const codeVerifier = crypto.randomBytes(32).toString('base64url');
     const codeChallenge = crypto
       .createHash('sha256')
@@ -73,15 +55,13 @@ async function githubAuth(req, res) {
       .digest('base64url');
 
     // ── STEP 2: Generate a random "state" parameter ──
-    // "state" prevents CSRF attacks on OAuth.
-    // We generate a random string, store it, and check it when GitHub calls back.
     const state = crypto.randomBytes(16).toString('hex');
 
-    // ── STEP 3: Store the verifier so we can use it in the callback ──
-    pendingAuth.set(state, {
+    // ── STEP 3: Store the verifier in MongoDB (Serverless friendly) ──
+    await OAuthState.create({
+      state,
       codeVerifier,
       clientType,
-      createdAt: Date.now(),
     });
 
     // ── STEP 4: Build the GitHub authorization URL ──
@@ -132,16 +112,21 @@ async function githubCallback(req, res) {
   try {
     const { code, state } = req.query;
 
-    // ── STEP 1: Validate the state parameter ──
-    if (!state || !pendingAuth.has(state)) {
+    // ── STEP 1: Validate the state parameter from MongoDB ──
+    if (!state) {
+      return res.status(400).json({ status: 'error', message: 'Missing state parameter.' });
+    }
+
+    const pending = await OAuthState.findOneAndDelete({ state });
+    
+    if (!pending) {
       return res.status(400).json({
         status: 'error',
         message: 'Invalid or expired OAuth state. Please try logging in again.',
       });
     }
 
-    const { codeVerifier, clientType } = pendingAuth.get(state);
-    pendingAuth.delete(state); // One-time use — delete it
+    const { codeVerifier, clientType } = pending;
 
     if (!code) {
       return res.status(400).json({
