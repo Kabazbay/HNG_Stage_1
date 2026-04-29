@@ -249,22 +249,23 @@ async function githubCallback(req, res) {
       });
     } else {
       // Web Portal: set tokens as HTTP-only cookies and redirect
-      const isProduction = process.env.NODE_ENV === 'production';
+      // On Vercel, we MUST use SameSite=None and Secure=true for cross-subdomain cookies
+      const isLocal = req.get('host').includes('localhost') || req.get('host').includes('127.0.0.1');
+      const cookieOptions = {
+        httpOnly: true,
+        secure: !isLocal, // Must be true for SameSite=None
+        sameSite: isLocal ? 'lax' : 'none',
+        path: '/',
+      };
 
       res.cookie('access_token', accessToken, {
-        httpOnly: true,      // JavaScript can NOT read this cookie (XSS protection)
-        secure: isProduction, // Only send over HTTPS in production
-        sameSite: isProduction ? 'none' : 'lax', // Cross-site cookie handling
-        maxAge: 15 * 60 * 1000, // 15 minutes (matches access token expiry)
-        path: '/',
+        ...cookieOptions,
+        maxAge: 15 * 60 * 1000,
       });
 
       res.cookie('refresh_token', refreshToken, {
-        httpOnly: true,
-        secure: isProduction,
-        sameSite: isProduction ? 'none' : 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days (matches refresh token expiry)
-        path: '/',
+        ...cookieOptions,
+        maxAge: 7 * 24 * 60 * 60 * 1000,
       });
 
       // Redirect to the web portal
@@ -327,31 +328,31 @@ async function refreshToken(req, res) {
     await user.save();
 
     // ── Return based on client type ──
-    // Check if this is a cookie-based request (web portal)
-    if (req.cookies && req.cookies.refresh_token) {
-      const isProduction = process.env.NODE_ENV === 'production';
+      // Check if this is a cookie-based request (web portal)
+      if (req.cookies && req.cookies.refresh_token) {
+        const isLocal = req.get('host').includes('localhost') || req.get('host').includes('127.0.0.1');
+        const cookieOptions = {
+          httpOnly: true,
+          secure: !isLocal,
+          sameSite: isLocal ? 'lax' : 'none',
+          path: '/',
+        };
 
-      res.cookie('access_token', newAccessToken, {
-        httpOnly: true,
-        secure: isProduction,
-        sameSite: isProduction ? 'none' : 'lax',
-        maxAge: 15 * 60 * 1000,
-        path: '/',
-      });
+        res.cookie('access_token', newAccessToken, {
+          ...cookieOptions,
+          maxAge: 15 * 60 * 1000,
+        });
 
-      res.cookie('refresh_token', newRefreshToken, {
-        httpOnly: true,
-        secure: isProduction,
-        sameSite: isProduction ? 'none' : 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-        path: '/',
-      });
+        res.cookie('refresh_token', newRefreshToken, {
+          ...cookieOptions,
+          maxAge: 7 * 24 * 60 * 60 * 1000,
+        });
 
-      return res.status(200).json({
-        status: 'success',
-        message: 'Tokens refreshed successfully.',
-      });
-    }
+        return res.status(200).json({
+          status: 'success',
+          message: 'Tokens refreshed successfully.',
+        });
+      }
 
     // CLI: return tokens as JSON
     return res.status(200).json({
@@ -449,13 +450,13 @@ async function getMe(req, res) {
 function getCsrfToken(req, res) {
   const token = crypto.randomBytes(32).toString('hex');
 
-  const isProduction = process.env.NODE_ENV === 'production';
+  const isLocal = req.get('host').includes('localhost') || req.get('host').includes('127.0.0.1');
 
   // Store CSRF token in an HTTP-only cookie
   res.cookie('csrf_token', token, {
     httpOnly: true,
-    secure: isProduction,
-    sameSite: isProduction ? 'none' : 'lax',
+    secure: !isLocal,
+    sameSite: isLocal ? 'lax' : 'none',
     maxAge: 60 * 60 * 1000, // 1 hour
     path: '/',
   });
