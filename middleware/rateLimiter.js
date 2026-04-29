@@ -16,11 +16,11 @@
 const rateLimit = require('express-rate-limit');
 
 // ── Rate limiter for auth endpoints ──
-// Strict limit: only 10 requests per minute
+// Strict limit: only 100 requests per 15 minutes
 // This prevents brute force login attempts
 const authLimiter = rateLimit({
-  windowMs: 60 * 1000,  // 1 minute (in milliseconds: 60 seconds × 1000)
-  max: 10,              // Maximum 10 requests per window
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100,              // Maximum 100 requests per window
   standardHeaders: true, // Send rate limit info in response headers (X-RateLimit-*)
   legacyHeaders: false,  // Don't send old X-RateLimit-* headers
 
@@ -34,10 +34,10 @@ const authLimiter = rateLimit({
 });
 
 // ── Rate limiter for all other endpoints ──
-// More lenient: 60 requests per minute
+// More lenient: 300 requests per 15 minutes
 const generalLimiter = rateLimit({
-  windowMs: 60 * 1000,  // 1 minute
-  max: 60,              // Maximum 60 requests per window
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 300,              // Maximum 300 requests per window
   standardHeaders: true,
   legacyHeaders: false,
 
