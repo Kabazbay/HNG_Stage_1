@@ -27,6 +27,9 @@ const {
 router.get('/github', githubAuth);              // Start OAuth
 router.get('/github/callback', githubCallback); // OAuth callback
 router.post('/refresh', refreshToken);          // Refresh tokens
+router.all('/refresh', (req, res) => {
+  res.status(405).json({ status: 'error', message: 'Method Not Allowed. Use POST.' });
+});
 
 // ── Protected routes (must be logged in) ──
 router.post('/logout', authenticate, logout);   // Log out
