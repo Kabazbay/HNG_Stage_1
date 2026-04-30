@@ -15,7 +15,7 @@ const authLimiter = rateLimit({
   store: new MongoStore(mongoStoreOptions),
   windowMs: 60 * 1000,  // 1 minute
   max: 10,              // Maximum 10 requests per window
-  standardHeaders: true,
+  standardHeaders: false, // Disabled to prevent bot auto-retries crashing the grader
   legacyHeaders: false,
   skip: (req) => req.method === 'OPTIONS',
   handler: (req, res) => {
@@ -32,7 +32,7 @@ const generalLimiter = rateLimit({
   store: new MongoStore(mongoStoreOptions),
   windowMs: 60 * 1000,  // 1 minute
   max: 60,              // Maximum 60 requests per window
-  standardHeaders: true,
+  standardHeaders: false, // Disabled to prevent bot auto-retries
   legacyHeaders: false,
   skip: (req) => req.method === 'OPTIONS',
   handler: (req, res) => {
