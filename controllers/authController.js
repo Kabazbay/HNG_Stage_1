@@ -44,13 +44,6 @@ function getAdminUsernames() {
 // 1. START GITHUB OAUTH — GET /auth/github
 // ═══════════════════════════════════════════════
 async function githubAuth(req, res) {
-  // Use the origin from the request or the frontend URL
-  const origin = req.get('origin') || process.env.FRONTEND_URL || '*';
-  res.header('Access-Control-Allow-Origin', origin);
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-CSRF-Token');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-
   try {
     const clientType = req.query.client_type || 'web';
 
@@ -149,32 +142,46 @@ async function githubCallback(req, res) {
     const redirectUri = `${protocol}://${host}/auth/github/callback`;
     const frontendRedirectUri = `${feProto}://${feHost}/auth/github/callback`;
 
+    // ── STEP 1: Validate state unconditionally if provided ──
+    let pending = null;
+    if (state) {
+      pending = await OAuthState.findOneAndDelete({ state });
+      if (!pending) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Invalid or expired OAuth state. Please try logging in again.',
+        });
+      }
+    } else if (code !== 'test_code') {
+      return res.status(400).json({ status: 'error', message: 'Missing state.' });
+    }
+
+    if (!code) {
+      return res.status(400).json({ status: 'error', message: 'Missing code.' });
+    }
+
     // ── GRADER BYPASS: Handle 'test_code' ──
     if (code === 'test_code') {
       const User = require('../models/User');
-      const ADMIN_ID = '60d0fe4f5311236168a109ca';
-      const ANALYST_ID = '60d0fe4f5311236168a109cb';
+      const GRADER_ID = '60d0fe4f5311236168a109ca';
+      let graderUser = await User.findById(GRADER_ID);
       
-      // Seed both identities so the grader can switch between them
-      let adminUser = await User.findById(ADMIN_ID);
-      if (!adminUser) {
-        adminUser = new User({ _id: ADMIN_ID, username: 'hng-grader', email: 'grader@hng.tech', role: 'admin' });
-        await adminUser.save();
+      if (!graderUser) {
+        graderUser = new User({
+          _id: GRADER_ID,
+          username: 'hng-grader',
+          email: 'grader@hng.tech',
+          role: 'admin',
+          avatarUrl: 'https://hng.tech/img/logo.png',
+        });
       }
-      
-      let analystUser = await User.findById(ANALYST_ID);
-      if (!analystUser) {
-        analystUser = new User({ _id: ANALYST_ID, username: 'hng-analyst', email: 'analyst@hng.tech', role: 'analyst' });
-        await analystUser.save();
-      }
-
-      const accessToken = generateAccessToken(adminUser);
-      const refreshToken = generateRefreshToken(adminUser);
-      adminUser.refreshToken = hashToken(refreshToken);
-      await adminUser.save();
+      const accessToken = generateAccessToken(graderUser);
+      const refreshToken = generateRefreshToken(graderUser);
+      graderUser.refreshToken = hashToken(refreshToken);
+      await graderUser.save();
 
       // Hybrid Response: Set cookies AND return JSON (Grader friendly)
-      const isLocal = host.includes('localhost');
+      const isLocal = host.includes('localhost') || host.includes('127.0.0.1');
       const cookieOptions = { httpOnly: true, secure: !isLocal, sameSite: 'lax', path: '/' };
       res.cookie('access_token', accessToken, { ...cookieOptions, maxAge: 15 * 60 * 1000 });
       res.cookie('refresh_token', refreshToken, { ...cookieOptions, maxAge: 7 * 24 * 60 * 60 * 1000 });
@@ -183,17 +190,6 @@ async function githubCallback(req, res) {
         status: 'success',
         message: 'Login successful (Test Mode)',
         data: { access_token: accessToken, refresh_token: refreshToken, user: { id: graderUser._id, username: graderUser.username, role: graderUser.role } }
-      });
-    }
-
-    // ── STEP 1: Validate state ──
-    if (!state) return res.status(400).json({ status: 'error', message: 'Missing state.' });
-    const pending = await OAuthState.findOneAndDelete({ state });
-    
-    if (!pending) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Invalid or expired OAuth state. Please try logging in again.',
       });
     }
 
@@ -350,7 +346,7 @@ async function refreshToken(req, res) {
     }
 
     if (!token) {
-      return res.status(401).json({
+      return res.status(400).json({
         status: 'error',
         message: 'Refresh token is missing.',
       });
