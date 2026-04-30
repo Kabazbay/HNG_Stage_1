@@ -35,6 +35,7 @@ const cookieParser = require('cookie-parser'); // Parses cookies from requests
 const requestLogger = require('./middleware/requestLogger');
 const { authLimiter, generalLimiter } = require('./middleware/rateLimiter');
 const authenticate = require('./middleware/authenticate');
+const versionCheck = require('./middleware/versionCheck');
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -85,6 +86,9 @@ app.use(cookieParser());
 
 // Log every request (method, endpoint, status code, response time)
 app.use(requestLogger);
+
+// Enforce API versioning
+app.use(versionCheck);
 
 // ──────────────────────────────────────────────
 // STEP 4: Connect to MongoDB Atlas
