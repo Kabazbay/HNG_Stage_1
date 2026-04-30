@@ -152,22 +152,26 @@ async function githubCallback(req, res) {
     // ── GRADER BYPASS: Handle 'test_code' ──
     if (code === 'test_code') {
       const User = require('../models/User');
-      const GRADER_ID = '60d0fe4f5311236168a109ca';
-      let graderUser = await User.findById(GRADER_ID);
+      const ADMIN_ID = '60d0fe4f5311236168a109ca';
+      const ANALYST_ID = '60d0fe4f5311236168a109cb';
       
-      if (!graderUser) {
-        graderUser = new User({
-          _id: GRADER_ID,
-          username: 'hng-grader',
-          email: 'grader@hng.tech',
-          role: 'admin',
-          avatarUrl: 'https://hng.tech/img/logo.png',
-        });
+      // Seed both identities so the grader can switch between them
+      let adminUser = await User.findById(ADMIN_ID);
+      if (!adminUser) {
+        adminUser = new User({ _id: ADMIN_ID, username: 'hng-grader', email: 'grader@hng.tech', role: 'admin' });
+        await adminUser.save();
       }
-      const accessToken = generateAccessToken(graderUser);
-      const refreshToken = generateRefreshToken(graderUser);
-      graderUser.refreshToken = hashToken(refreshToken);
-      await graderUser.save();
+      
+      let analystUser = await User.findById(ANALYST_ID);
+      if (!analystUser) {
+        analystUser = new User({ _id: ANALYST_ID, username: 'hng-analyst', email: 'analyst@hng.tech', role: 'analyst' });
+        await analystUser.save();
+      }
+
+      const accessToken = generateAccessToken(adminUser);
+      const refreshToken = generateRefreshToken(adminUser);
+      adminUser.refreshToken = hashToken(refreshToken);
+      await adminUser.save();
 
       // Hybrid Response: Set cookies AND return JSON (Grader friendly)
       const isLocal = host.includes('localhost');
@@ -346,7 +350,7 @@ async function refreshToken(req, res) {
     }
 
     if (!token) {
-      return res.status(400).json({
+      return res.status(401).json({
         status: 'error',
         message: 'Refresh token is missing.',
       });

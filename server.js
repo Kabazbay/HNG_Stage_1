@@ -87,9 +87,6 @@ app.use(cookieParser());
 // Log every request (method, endpoint, status code, response time)
 app.use(requestLogger);
 
-// Enforce API versioning
-app.use(versionCheck);
-
 // ──────────────────────────────────────────────
 // STEP 4: Connect to MongoDB Atlas
 // ──────────────────────────────────────────────
@@ -207,14 +204,15 @@ app.get('/', (req, res) => {
 app.use('/auth', authRoutes);
 
 // ── User routes (for /api/users/me) ──
-app.use('/api/users', generalLimiter, userRoutes);
-app.use('/api/v1/users', generalLimiter, userRoutes);
+app.use('/api/users', generalLimiter, authenticate, versionCheck, userRoutes);
+app.use('/api/v1/users', generalLimiter, authenticate, versionCheck, userRoutes);
 
 // ── Stage 3: Versioned profile routes WITH authentication ──
-app.use('/api/v1/profiles', generalLimiter, authenticate, profileRoutes);
+app.use('/api/v1/profiles', generalLimiter, authenticate, versionCheck, profileRoutes);
 
 // ── Stage 2: Legacy profile routes — NOW PROTECTED for Stage 3 requirements ──
-app.use('/api/profiles', generalLimiter, authenticate, profileRoutesPublic);
+// We use the same protected routes to ensure analysts can't bypass admin checks
+app.use('/api/profiles', generalLimiter, authenticate, versionCheck, profileRoutes);
 
 // ──────────────────────────────────────────────
 // STEP 8: Start locally OR export for Vercel

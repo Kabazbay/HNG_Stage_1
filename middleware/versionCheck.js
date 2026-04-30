@@ -4,15 +4,13 @@
 
 module.exports = function versionCheck(req, res, next) {
   // We only enforce versioning on /api routes
-  if (req.path.startsWith('/api')) {
-    const apiVersion = req.headers['x-api-version'];
-    
-    if (!apiVersion || apiVersion !== 'v1') {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Invalid or missing API version. Use X-API-Version: v1 header.',
-      });
-    }
+  const apiVersion = req.headers['x-api-version'];
+  
+  if (!apiVersion || apiVersion !== 'v1') {
+    return res.status(400).json({
+      status: 'error',
+      message: 'API version v1 is required. Set X-API-Version: v1 header.',
+    });
   }
   
   next();
